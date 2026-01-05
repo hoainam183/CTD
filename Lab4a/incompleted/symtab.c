@@ -339,6 +339,7 @@ void cleanSymTab(void) {
 }
 
 void enterBlock(Scope* scope) {
+  scope->outer = symtab->currentScope;
   symtab->currentScope = scope;
 }
 
@@ -347,6 +348,12 @@ void exitBlock(void) {
 }
 
 void declareObject(Object* obj) {
+    // Handle built-in functions/procedures during initialization (when currentScope is NULL)
+  if (symtab->currentScope == NULL) {
+    addObject(&(symtab->globalObjectList), obj);
+    return;
+  }
+  
   // Add object to current scope's object list
   addObject(&(symtab->currentScope->objList), obj);
   
@@ -377,7 +384,7 @@ void declareObject(Object* obj) {
   }
   
   // For global scope objects (constants, types, functions, procedures)
-  if (symtab->currentScope == symtab->program->progAttrs->scope) {
+  if (symtab->program != NULL && symtab->currentScope == symtab->program->progAttrs->scope) {
     addObject(&(symtab->globalObjectList), obj);
   }
 }
