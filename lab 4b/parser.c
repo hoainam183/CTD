@@ -537,7 +537,6 @@ void compileWhileSt(void) {
 }
 
 void compileForSt(void) {
-  // Generate code for for-statement
   Type* varType;
   Type *type;
   CodeAddress loopAddress;
@@ -545,7 +544,11 @@ void compileForSt(void) {
 
   eat(KW_FOR);
 
-  varType = compileLValue();
+  varType = compileLValue();  // This pushes address of loop variable
+  
+  // Copy address for later use in the loop
+  genCV();
+  
   eat(SB_ASSIGN);
 
   type = compileExpression();
@@ -557,14 +560,18 @@ void compileForSt(void) {
   eat(KW_TO);
 
   // Remember the address for loop condition check
+  // At this point, address of i is still on stack (from CV above)
   loopAddress = getCurrentCodeAddress();
   
-  // Get loop variable value and compare with upper bound
+  // Copy address and load value of loop variable
+  genCV();
+  genLI();
+  
+  // Push upper bound onto stack
   type = compileExpression();
   checkTypeEquality(varType, type);
   
   // Generate comparison: check if loop var <= upper bound
-  // The upper bound is on stack, need to compare with loop var
   genLE();
   
   // Jump out if condition is false (loop var > upper bound)
@@ -573,16 +580,27 @@ void compileForSt(void) {
   eat(KW_DO);
   compileStatement();
   
-  // Increment loop variable: get address, get value, add 1, store
-  // This is simplified - actual implementation may need the l-value again
-  genLC(1);
-  genAD();
+  // Increment loop variable:
+  // Copy address twice (one for ST target, one for loading current value)
+  genCV();
+  genCV();
+  genLI();        // Load current value of i
+  genLC(1);       // Push 1
+  genAD();        // i + 1
+  genST();        // Store back to i
   
-  // Jump back to condition
-  genJ(loopAddress);
+  // Prepare for next iteration check
+  genCV();        // Copy address
+  genLI();        // Load i value
+  
+  // Jump back to comparison with upper bound
+  genJ(loopAddress + 2);  // Skip CV and LI, go directly to upper bound expression
   
   // Update false jump to after loop
   updateFJ(fjInstruction, getCurrentCodeAddress());
+  
+  // Clean up: remove the saved address from stack
+  genDCT(1);
 }
 
 void compileArgument(Object* param) {
